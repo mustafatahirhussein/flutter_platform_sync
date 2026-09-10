@@ -199,39 +199,6 @@ flutter clean
 flutter build apk   # or: flutter run
 ```
 
-## Version numbers
-
-`--version` must match a real Flutter release tag exactly, e.g. `3.47.0`,
-not `3.47`. Check
-[github.com/flutter/flutter/tags](https://github.com/flutter/flutter/tags)
-if you're not sure of the exact tag name. The tool needs internet access
-(to `raw.githubusercontent.com`) to look this up.
-
-## Known limitations (v0.2.0)
-
-- Regex-based edits, not a real Gradle/Kotlin DSL parser — it's written to
-  be conservative (skip a field it doesn't recognize rather than guess),
-  but always review the dry-run output and diff before committing.
-- The built-in-Kotlin migration doesn't handle a Jetpack Compose compiler
-  version bump. If your project uses Compose, a Kotlin version jump
-  sometimes needs a matching `composeOptions { kotlinCompilerExtensionVersion
-  = "..." }` update too — the tool doesn't know about that yet. If your
-  build fails on a Compose/Kotlin mismatch after running this, that's why.
-- The Groovy-layout `kotlinOptions` block is deliberately left untouched
-  during the built-in-Kotlin migration (only the plugin line is removed) —
-  this path hasn't been validated against a real Groovy project yet.
-- Doesn't touch iOS/Podfile/Xcode deployment targets — Android only, per
-  what this was built for. Worth a v0.3 if useful.
-- Only validated so far against one real project through one specific
-  failure mode (the AGP 9 built-in-Kotlin break). Treat it as an
-  early-stage tool: keep your project under version control, review every
-  dry-run diff, and don't skip the confirmation prompt.
-- No pub.dev publish yet (`publish_to: 'none'` in pubspec.yaml) — this is
-  a working draft, not published. Remove that line and run
-  `dart pub publish` yourself if you want to ship it publicly. Run
-  `dart pub publish --dry-run` first to catch any pub.dev validation
-  issues (missing LICENSE, name conflicts, etc.) before actually publishing.
-
 ## License
 
 See `LICENSE`.
