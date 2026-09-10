@@ -1,0 +1,12 @@
+# Dart/Flutter tooling
+.dart_tool/
+.packages
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Backups left behind by test runs of this tool against sample projects
+*.bak
