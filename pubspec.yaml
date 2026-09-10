@@ -6,7 +6,6 @@ description: >
 version: 1.0.0
 homepage: https://github.com/mustafatahirhussein/flutter_platform_sync
 repository: https://github.com/mustafatahirhussein/flutter_platform_sync
-publish_to: 'none' # remove this line if/when you're ready to publish to pub.dev
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

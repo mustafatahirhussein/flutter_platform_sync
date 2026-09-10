@@ -108,6 +108,13 @@ Future<void> main(List<String> arguments) async {
     );
     exitCode = 1;
     return;
+  } catch (e) {
+    stderr.writeln(
+      'Unexpected error while looking up Flutter $targetVersion\'s Android '
+      'template defaults: $e',
+    );
+    exitCode = 1;
+    return;
   }
 
   stdout.writeln(

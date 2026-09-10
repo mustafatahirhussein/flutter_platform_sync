@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'gradle_versions.dart';
 
-/// One proposed (or applied) edit to a single file.
 class ChangeEntry {
   ChangeEntry({
     required this.file,
@@ -23,9 +22,6 @@ class ChangeEntry {
       '  + $newLine';
 }
 
-/// Result of scanning a project: what would change, and which regex-based
-/// rewrite rules matched. Nothing is written to disk until [apply] is
-/// called on this result.
 class PlannedUpdate {
   PlannedUpdate(this._rewrites);
 
@@ -36,10 +32,6 @@ class PlannedUpdate {
   List<ChangeEntry> get allChanges =>
       _rewrites.expand((r) => r.changes).toList();
 
-  /// Writes every planned change to disk. Each touched file gets a sibling
-  /// `<name>.bak` written first (only once — if a `.bak` already exists it's
-  /// left alone, so re-running the tool doesn't clobber your *original*
-  /// backup with an already-modified version).
   Future<List<File>> apply() async {
     final touched = <File>[];
     for (final rewrite in _rewrites) {
@@ -62,16 +54,6 @@ class _FileRewrite {
   final List<ChangeEntry> changes;
 }
 
-/// Scans (and, when [PlannedUpdate.apply] is called, edits) the standard set
-/// of Android files a Flutter project ships, updating Gradle/AGP/Kotlin/SDK
-/// version numbers to match [target].
-///
-/// Handles both the current "declarative plugins {}" project layout
-/// (`settings.gradle.kts` holding the AGP/Kotlin plugin versions) and the
-/// older imperative layout (`android/build.gradle` holding
-/// `ext.kotlin_version` and a `classpath 'com.android.tools.build:gradle:…'`
-/// line), since plenty of projects that have been around a few years are
-/// still on the old layout.
 class ProjectUpdater {
   ProjectUpdater({required this.projectRoot, required this.target});
 
@@ -92,23 +74,11 @@ class ProjectUpdater {
     return PlannedUpdate(rewrites);
   }
 
-  /// AGP's major version number, parsed from [target.agpVersion] (e.g.
-  /// `"9.1.0"` -> `9`). Returns null if it can't be parsed.
   int? get _agpMajorVersion {
     final match = RegExp(r'^(\d+)').firstMatch(target.agpVersion);
     return match == null ? null : int.tryParse(match.group(1)!);
   }
 
-  /// Starting with AGP 9.0, explicitly applying the `kotlin-android` /
-  /// `org.jetbrains.kotlin.android` plugin in `app/build.gradle(.kts)` is
-  /// rejected outright — AGP now provides Kotlin support built in. Projects
-  /// written against older AGP still apply that plugin explicitly and use a
-  /// `kotlinOptions { jvmTarget = ... }` block, both of which need removing.
-  /// Applied in-place to [content] (called from [_planAppBuildGradle] so
-  /// both edits land in one rewrite of the file, not two competing ones).
-  ///
-  /// Only does anything when [target] is on AGP 9+ — a no-op for target
-  /// versions still on AGP 8, where the old shape is still correct.
   String _applyBuiltInKotlinMigration(
     String content, {
     required bool isKts,
@@ -118,7 +88,6 @@ class ProjectUpdater {
     final agpMajor = _agpMajorVersion;
     if (agpMajor == null || agpMajor < 9) return content;
 
-    // 1. Remove the explicit Kotlin Android plugin application line.
     final pluginLinePattern = isKts
         ? RegExp(
             r'''^[ \t]*id\("(?:kotlin-android|org\.jetbrains\.kotlin\.android)"\)[ \t]*\r?\n''',
@@ -141,40 +110,73 @@ class ProjectUpdater {
       ));
     }
 
-    // 2. Replace the old `kotlinOptions { jvmTarget = ... }` block. Only
-    // attempted for the Kotlin DSL file — the Groovy `kotlinOptions` block
-    // is still valid syntax there for now, so it's left alone rather than
-    // guessed at.
     if (isKts) {
-      final kotlinOptionsPattern = RegExp(
-        r'kotlinOptions\s*\{\s*jvmTarget\s*=[^\n}]*\n?\s*\}',
-      );
-      final koMatch = kotlinOptionsPattern.firstMatch(content);
-      if (koMatch != null) {
-        final oldBlock = koMatch.group(0)!;
-        const newBlock = 'kotlin {\n'
-            '        compilerOptions {\n'
-            '            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17\n'
-            '        }\n'
-            '    }';
-        content = content.replaceFirst(oldBlock, newBlock);
-        changes.add(ChangeEntry(
-          file: file,
-          description: 'Replace kotlinOptions block with the new '
-              'kotlin { compilerOptions { } } block',
-          oldLine: oldBlock,
-          newLine: newBlock,
-        ));
+      final block = _findBracedBlock(content, 'kotlinOptions');
+      if (block != null) {
+        final oldBlock = content.substring(block.start, block.end);
+        final innerTrimmed = block.inner.trim();
+        final isSingleJvmTargetAssignment =
+            RegExp(r'^jvmTarget\s*=\s*\S.*$').hasMatch(innerTrimmed) &&
+                !innerTrimmed.contains('\n');
+
+        if (isSingleJvmTargetAssignment) {
+          const newBlock = 'kotlin {\n'
+              '        compilerOptions {\n'
+              '            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17\n'
+              '        }\n'
+              '    }';
+          content = content.replaceRange(block.start, block.end, newBlock);
+          changes.add(ChangeEntry(
+            file: file,
+            description: 'Replace kotlinOptions block with the new '
+                'kotlin { compilerOptions { } } block',
+            oldLine: oldBlock,
+            newLine: newBlock,
+          ));
+        } else {
+          changes.add(ChangeEntry(
+            file: file,
+            description: 'MANUAL ACTION NEEDED: kotlinOptions block has '
+                'more than just jvmTarget in it — not auto-converted, since '
+                'guessing at unfamiliar properties risks a wrong rewrite. '
+                'Move its contents into a kotlin { compilerOptions { ... } '
+                '} block yourself (see: '
+                'https://docs.flutter.dev/release/breaking-changes/'
+                'migrate-to-built-in-kotlin). Left as-is for now, but the '
+                'build WILL fail once the plugin line below is removed, '
+                'since kotlinOptions becomes an unresolved reference '
+                'without it.',
+            oldLine: oldBlock,
+            newLine: '(left unchanged — needs manual migration)',
+          ));
+        }
       }
     }
 
     return content;
   }
 
-  /// Adds the temporary `android.newDsl=false` compatibility flag to
-  /// `gradle.properties`, per Flutter's built-in-Kotlin migration guide,
-  /// when the target Flutter version is on AGP 9+ and the flag isn't
-  /// already present.
+  ({int start, int end, String inner})? _findBracedBlock(
+    String content,
+    String name,
+  ) {
+    final head = RegExp('$name\\s*\\{').firstMatch(content);
+    if (head == null) return null;
+
+    var depth = 1;
+    var i = head.end;
+    final innerStart = i;
+    while (i < content.length && depth > 0) {
+      final char = content[i];
+      if (char == '{') depth++;
+      if (char == '}') depth--;
+      i++;
+    }
+    if (depth != 0) return null;
+
+    return (start: head.start, end: i, inner: content.substring(innerStart, i - 1));
+  }
+
   Future<List<_FileRewrite>> _planGradlePropertiesNewDslFlag() async {
     final agpMajor = _agpMajorVersion;
     if (agpMajor == null || agpMajor < 9) return [];
@@ -265,10 +267,6 @@ class ProjectUpdater {
     return results;
   }
 
-  /// Handles the older, pre-declarative-plugins project layout where the
-  /// root `android/build.gradle` declares `ext.kotlin_version` and a
-  /// `classpath 'com.android.tools.build:gradle:X.Y.Z'` dependency instead
-  /// of a `settings.gradle.kts` plugins block.
   Future<List<_FileRewrite>> _planRootBuildGradle() async {
     final file = File('${_android.path}/build.gradle');
     if (!await file.exists()) return [];
@@ -322,15 +320,6 @@ class ProjectUpdater {
       var content = await file.readAsString();
       final changes = <ChangeEntry>[];
 
-      // Try the modern short field names first (compileSdk/minSdk/targetSdk,
-      // used since AGP 8), falling back to the older *Version-suffixed
-      // names still found in projects that haven't touched their app-level
-      // build.gradle field names in a while. Many older/unmodified projects
-      // instead reference `flutter.compileSdkVersion` etc. (a variable
-      // supplied by Flutter's own Gradle plugin, not a literal number) — in
-      // that case there's nothing to rewrite here, which is correct: those
-      // projects pick up new SDK versions automatically from the Flutter
-      // Gradle plugin itself, not from this file.
       if (target.compileSdk != null) {
         content = _replaceSdkField(
           content,
@@ -383,9 +372,6 @@ class ProjectUpdater {
     return results;
   }
 
-  /// Rewrites a Gradle Kotlin-DSL plugin declaration like:
-  ///   id("com.android.application") version "8.7.0" apply false
-  /// to use [newVersion], only if the version differs.
   String _replaceVersioned(
     String content, {
     required String idPattern,
@@ -411,16 +397,6 @@ class ProjectUpdater {
     return content.replaceFirst(oldLine, newLine);
   }
 
-  /// Rewrites a `compileSdk = 35` / `compileSdk 35` / `ndkVersion = "27.0.0"`
-  /// style field. Supports both Groovy (`field 35`) and Kotlin DSL
-  /// (`field = 35`) forms, and both quoted and bare numeric values.
-  ///
-  /// Tries each name in [fields] in order and stops at the first one that
-  /// actually appears in the file with a literal value to replace — this
-  /// lets callers offer both the modern short field name (`compileSdk`) and
-  /// the older `*Version`-suffixed one (`compileSdkVersion`) without
-  /// double-editing a file that happens to contain both words in unrelated
-  /// contexts.
   String _replaceSdkField(
     String content, {
     required List<String> fields,

@@ -2,8 +2,6 @@ import 'package:test/test.dart';
 import 'package:flutter_platform_sync/src/gradle_versions.dart';
 
 const _sampleSource = '''
-// A trimmed stand-in for flutter_tools' gradle_utils.dart, just enough
-// shape to exercise the regexes without hitting the network.
 const templateDefaultGradleVersion = '9.3.1';
 const templateAndroidGradlePluginVersion = '9.1.0';
 const templateAndroidGradlePluginVersionForModule = '9.1.0';

@@ -1,34 +1,7 @@
 import 'package:http/http.dart' as http;
 
-/// `compileSdk` and `targetSdk` are pinned to this value rather than parsed
-/// out of Flutter's `gradle_utils.dart`, regardless of the requested target
-/// Flutter version.
-///
-/// Two independent reasons:
-/// 1. The constant name Flutter uses for `compileSdk`/`minSdk` isn't stable
-///    across releases (`compileSdkVersion` as a plain string on most tags,
-///    a computed `compileSdkVersionInt` on newer ones) — the source-parsing
-///    approach that works for gradle/AGP/kotlin/targetSdk/ndk doesn't hold
-///    up for this field, so pinning avoids silently doing nothing.
-/// 2. API 36 is also just the right floor independent of Flutter version:
-///    Play Store's 16 KB memory page size requirement (Google Play policy,
-///    effective for app updates since Nov 2025) needs `compileSdk`/
-///    `targetSdk` at 36 with a 16 KB-aligned NDK — so "36" is the correct
-///    answer here even when the target Flutter release itself still
-///    defaults lower.
 const String fixedCompileAndTargetSdk = '36';
 
-/// The Android/Gradle/Kotlin version numbers that a specific Flutter SDK
-/// release template ships with. These are read directly from Flutter's own
-/// `gradle_utils.dart` source for the requested tag, so they stay accurate
-/// as Flutter changes its defaults across releases — no hand-maintained
-/// table to go stale.
-///
-/// The exceptions are [compileSdk] and [targetSdk], which are always
-/// [fixedCompileAndTargetSdk] (see its doc comment), and [minSdk], which
-/// this class never populates from Flutter's source at all — the CLI asks
-/// the user for it directly instead, since it's a project-specific choice
-/// Flutter's own template default doesn't have an opinion worth copying.
 class GradleVersions {
   GradleVersions({
     required this.flutterVersion,
@@ -72,15 +45,6 @@ class GradleVersionLookupException implements Exception {
   String toString() => message;
 }
 
-/// Fetches the canonical Gradle/AGP/Kotlin/SDK version constants that ship
-/// with a given Flutter release, by reading
-/// `packages/flutter_tools/lib/src/android/gradle_utils.dart` straight out
-/// of the flutter/flutter repo at the git tag matching [flutterVersion].
-///
-/// This is the same file `flutter create` itself consults, so the numbers
-/// returned are exactly what a *fresh* project on that Flutter version would
-/// have — the ground truth for "what should my project's Android config
-/// look like on version X".
 Future<GradleVersions> fetchGradleVersionsFor(String flutterVersion) async {
   final candidateTags = <String>[
     flutterVersion,
@@ -116,9 +80,6 @@ Future<GradleVersions> fetchGradleVersionsFor(String flutterVersion) async {
   }
 
   String? _extract(String constName) {
-    // Matches things like:
-    //   const templateDefaultGradleVersion = '9.3.1';
-    //   const String templateDefaultGradleVersion = '9.3.1';
     final pattern = RegExp(
       '(?:const|final)\\s+(?:String\\s+)?$constName\\s*=\\s*[\'"]([^\'"]+)[\'"]',
     );
@@ -147,23 +108,16 @@ Future<GradleVersions> fetchGradleVersionsFor(String flutterVersion) async {
     agpVersion: agp,
     kotlinVersion: kotlin,
     compileSdk: fixedCompileAndTargetSdk,
-    // minSdk is deliberately left unset here — the CLI fills it in from the
-    // user's own choice, not from Flutter's template default.
     minSdk: null,
     targetSdk: fixedCompileAndTargetSdk,
     ndkVersion: ndk,
   );
 }
 
-/// Small helper kept separate so it's easy to unit test the regex parsing
-/// without needing network access — feed it a raw file body directly.
 GradleVersions parseGradleVersionsFromSource(
   String flutterVersion,
   String source,
 ) {
-  // Delegates to the same regexes as [fetchGradleVersionsFor] by reusing the
-  // private extraction logic would require refactor; for now this mirrors
-  // it explicitly for test purposes.
   String? extract(String constName) {
     final pattern = RegExp(
       '(?:const|final)\\s+(?:String\\s+)?$constName\\s*=\\s*[\'"]([^\'"]+)[\'"]',
