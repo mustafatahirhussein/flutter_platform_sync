@@ -3,7 +3,7 @@ description: >
   CLI that syncs a Flutter project's Android Gradle/AGP/Kotlin versions to
   a target Flutter release, pins compileSdk/targetSdk to 36, and prompts
   for minSdk.
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/mustafatahirhussein/flutter_platform_sync
 repository: https://github.com/mustafatahirhussein/flutter_platform_sync
 

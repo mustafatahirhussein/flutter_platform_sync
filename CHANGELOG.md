@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 - 2026-09-10
+
+- Added an `example/` folder showing basic usage.
+- Rewrote the README to be much shorter and easier to read — the old one
+  had grown too dense with implementation-level detail.
+
 ## 1.0.0 - 2026-09-10
 
 - `compileSdk` and `targetSdk` are now always set to 36, no matter which Flutter version you're targeting. This lines up with Google Play's 16 KB page size requirement, and also fixes a bug (see below) where these two fields were silently never getting updated at all.
