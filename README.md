@@ -6,10 +6,9 @@ hand-editing Gradle/Xcode/Podfile files yourself against Flutter's
 migration docs.
 
 > **Current scope: Android only.** The name is platform-neutral on purpose
-> — iOS/Podfile/Xcode support is on the roadmap, not shipped yet (see
-> Known limitations). Until then, "platform sync" means "Android Gradle
-> sync." This note stays here and gets removed the day iOS support
-> actually lands, not before.
+> — iOS/Podfile/Xcode support is on the roadmap, not shipped yet. Until
+> then, "platform sync" means "Android Gradle sync." This note stays here
+> and gets removed the day iOS support actually lands, not before.
 
 Right now it syncs Android's `Gradle` / `AGP` (Android Gradle Plugin) /
 `Kotlin` / SDK version numbers to match your target Flutter version, via
@@ -129,7 +128,7 @@ actually builds. For that:
    - A project on the modern Kotlin-DSL layout (`settings.gradle.kts`)
    - A project still on the older Groovy `build.gradle` layout, if you
      have one — this path is less exercised right now (see Known
-     limitations below)
+     limitations)
    - A version jump that crosses the AGP 9 boundary (to exercise the
      built-in-Kotlin migration) and one that doesn't (to confirm it stays
      a no-op)
@@ -198,6 +197,18 @@ After applying, actually build the project before trusting it:
 flutter clean
 flutter build apk   # or: flutter run
 ```
+
+## Known limitations
+
+- Only validated so far against one real project, through one specific
+  failure mode (the AGP 9 built-in-Kotlin break). Review every dry-run
+  diff before applying, especially on less common project layouts — the
+  older Groovy `build.gradle`/`settings.gradle` path in particular hasn't
+  been exercised against a real Groovy project yet.
+- If your project uses Jetpack Compose, a Kotlin version bump sometimes
+  needs a matching `composeOptions { kotlinCompilerExtensionVersion = "..."
+  }` update too — this tool doesn't handle that yet. If your build fails on
+  a Compose/Kotlin mismatch after running this, that's why.
 
 ## License
 
